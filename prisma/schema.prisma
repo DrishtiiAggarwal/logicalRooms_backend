@@ -1,13 +1,119 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  PROBLEM_SETTER
+  ADMIN
+}
+
+enum SubmissionStatus {
+  PENDING
+  ACCEPTED
+  WRONG_ANSWER
+  TLE
+  RUNTIME_ERROR
+  COMPILATION_ERROR
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+
+  users   User[]
+  problems Problem[]
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  username       String
+  email          String   @unique
+  passwordHash   String
+  role           UserRole
+  organizationId String   @db.Uuid
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdProblems Problem[]   @relation("ProblemCreator")
+  submissions   Submission[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Problem {
+  id                String   @id @default(uuid()) @db.Uuid
+  title             String
+  problemStatement  String
+  constraints       String?
+  validatorSolution String?
+  createdById       String   @db.Uuid
+  organizationId    String   @db.Uuid
+  createdAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ProblemCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  testCases    TestCase[]
+  submissions  Submission[]
+
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+model TestCase {
+  id         String   @id @default(uuid()) @db.Uuid
+  problemId  String   @db.Uuid
+  isHidden   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  problem Problem      @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  io      TestCaseIO?
+
+  @@index([problemId])
+}
+
+model TestCaseIO {
+  id         String @id @default(uuid()) @db.Uuid
+  testcaseId String @unique @db.Uuid
+  input      String
+  output     String
+
+  testcase TestCase @relation(fields: [testcaseId], references: [id], onDelete: Cascade)
+}
+
+model Language {
+  id      String @id @default(uuid()) @db.Uuid
+  name    String
+  version String
+
+  submissions Submission[]
+
+  @@unique([name, version])
+}
+
+model Submission {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @db.Uuid
+  problemId  String           @db.Uuid
+  languageId String           @db.Uuid
+  code       String
+  status     SubmissionStatus @default(PENDING)
+  submittedAt DateTime        @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem  Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([problemId])
+  @@index([submittedAt])
 }
